@@ -80,7 +80,7 @@ export default function CameraCapture({ value, onChange }) {
         </div>
         <div>
           <p className="text-base font-semibold text-green-700 dark:text-green-400">
-            Tap to Open LuCamera
+            Tap to Open Camera
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Take a photo of the rescued person

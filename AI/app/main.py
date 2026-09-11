@@ -11,7 +11,9 @@ from app.schemas.match import (
 )
 from app.services.face_service import (
     extract_face_embedding,
-    compute_cosine_similarity
+    compute_cosine_similarity,
+    get_mtcnn,
+    get_resnet
 )
 from app.services.phonetic_service import compute_phonetic_similarity
 from app.services.demographic_service import compute_demographic_similarity
@@ -26,6 +28,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} v{settings.VERSION}")
     logger.info(f"Upload directory resolved to: {settings.UPLOAD_DIR}")
+    try:
+        get_mtcnn()
+        get_resnet()
+        logger.info("Face models (MTCNN & FaceNet) loaded and ready.")
+    except Exception as e:
+        logger.warning(f"Could not pre-warm face models: {e}")
     yield
     logger.info(f"Shutting down {settings.APP_NAME}")
 

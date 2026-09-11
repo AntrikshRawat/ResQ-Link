@@ -10,21 +10,6 @@ const {
   getCandidateById,
   getTriageStats,
   deleteCandidate,
-<<<<<<< HEAD
-  evaluateProfiles,
-  getAiHealth,
-  triggerMatching,
-} = require('../controllers/matchController');
-
-// GET /api/v1/matching/ai-health (AI Sidecar connectivity check)
-router.get('/ai-health', getAiHealth);
-
-// POST /api/v1/matching/evaluate (Direct evaluation of two profiles via AI sidecar)
-router.post('/evaluate', evaluateProfiles);
-
-// POST /api/v1/matching/run/:reportId (Trigger matching pipeline for a report)
-router.post('/run/:reportId', triggerMatching);
-=======
   evaluatePersons,
   getAiHealth,
   triggerReportMatching,
@@ -38,7 +23,7 @@ router.post('/evaluate', evaluatePersons);
 
 // POST /api/v1/matching/trigger/:reportId (Trigger matching engine for a specific report)
 router.post('/trigger/:reportId', triggerReportMatching);
->>>>>>> 8c94acc927649382026e3bf1d51a3306be21f80d
+router.post('/run/:reportId', triggerReportMatching);
 
 // GET /api/v1/matching/stats
 router.get('/stats', getTriageStats);

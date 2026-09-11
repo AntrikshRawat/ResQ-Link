@@ -77,6 +77,12 @@ def double_metaphone(name: str) -> tuple[str, str]:
                 current += 1
             continue
         
+        if ch == "F":
+            primary.append("F")
+            secondary.append("F")
+            current += 2 if (current + 1 < length and cleaned[current + 1] == "F") else 1
+            continue
+
         if ch == "G":
             if current + 1 < length and cleaned[current + 1] == "H":
                 primary.append("K")
@@ -185,11 +191,20 @@ def double_metaphone(name: str) -> tuple[str, str]:
             current += 1
             continue
         
+        if ch == "X":
+            primary.append("KS")
+            secondary.append("KS")
+            current += 2 if (current + 1 < length and cleaned[current + 1] in ("C", "X")) else 1
+            continue
+
         if ch == "Z":
             primary.append("S")
             secondary.append("S")
             current += 2 if (current + 1 < length and cleaned[current + 1] == "Z") else 1
             continue
+
+        # Safety fallback to prevent infinite loops on any unhandled characters
+        current += 1
         
     p_code = "".join(primary)[:4]
     s_code = "".join(secondary)[:4]

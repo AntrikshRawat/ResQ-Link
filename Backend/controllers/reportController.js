@@ -65,8 +65,8 @@ async function createReport(req, res) {
     // 4. Generate a unique tracking code
     const tracking_code = await generateTrackingCode();
 
-    // 5. Grab the uploaded photo path (may be undefined if no file sent)
-    const photo_path = req.file ? req.file.path : null;
+    // 5. Grab the uploaded photo path (stored as relative web path uploads/filename)
+    const photo_path = req.file ? `uploads/${req.file.filename}` : null;
 
     // Associate with authenticated user if available
     const user_id = req.user?.id || req.body.user_id || null;

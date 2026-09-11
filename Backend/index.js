@@ -1,5 +1,5 @@
 // ============================================================================
-// ResQ-Link — Application Entry Point
+// ResQ-Link — Application Entry Point (Port 3000)
 // ============================================================================
 const express = require('express');
 const cors = require('cors');
