@@ -1,0 +1,14 @@
+import os
+import sys
+def main():
+    try:
+        import kagglehub
+    except ImportError:
+        print("The 'kagglehub' package is not installed. Please install it using 'pip install kagglehub'.")
+        sys.exit(1)
+    print("Downloading Kaggle dataset...")
+    path = kagglehub.dataset_download("jessicali9530/lfw-dataset")
+    print(f"Dataset downloaded to: {path}")
+
+if  __name__ == "__main__":
+    main()
