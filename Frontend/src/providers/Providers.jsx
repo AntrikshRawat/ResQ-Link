@@ -3,6 +3,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { AuthProvider } from "@/context/AuthContext";
+
 export default function Providers({ children }) {
   // useState ensures a single QueryClient instance per client-side render,
   // preventing re-creation on every render while still being SSR-safe.
@@ -24,7 +26,7 @@ export default function Providers({ children }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <AuthProvider>{children}</AuthProvider>
     </QueryClientProvider>
   );
 }

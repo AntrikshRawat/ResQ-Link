@@ -15,19 +15,25 @@ import {
   LuMapPin,
   LuCalendar,
   LuFileText,
-  LuCheckCircle2,
+  LuCircleCheck,
   LuLoader,
   LuShieldAlert,
+  LuTrash2,
 } from "react-icons/lu";
 
 const statusColors = {
+  MISSING: "bg-red-500/10 text-red-600 border-red-500/20",
   SHELTERED: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  RESCUED: "bg-blue-500/10 text-blue-600 border-blue-500/20",
   HOSPITALIZED: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  HOSPITAL_PATIENT: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   REUNITED: "bg-green-500/10 text-green-600 border-green-500/20",
+  RESOLVED_LOCATED: "bg-green-500/10 text-green-600 border-green-500/20",
   DECEASED: "bg-muted text-muted-foreground border-border",
+  UNIDENTIFIED_BODY: "bg-muted text-muted-foreground border-border",
 };
 
-export default function RecordDetailDialog({ person, onClose }) {
+export default function RecordDetailDialog({ person, onClose, onDelete }) {
   const { data: response, isLoading } = useQuery({
     queryKey: ["person-detail", person?.id],
     queryFn: () => getMasterPerson(person.id),
@@ -183,8 +189,18 @@ export default function RecordDetailDialog({ person, onClose }) {
               )}
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={onClose}>
+            <div className="flex items-center justify-between pt-3 border-t border-border">
+              {onDelete ? (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => onDelete(detail)}
+                >
+                  <LuTrash2 className="h-4 w-4" /> Delete Record
+                </Button>
+              ) : <div />}
+              <Button variant="outline" size="sm" onClick={onClose}>
                 Close
               </Button>
             </div>

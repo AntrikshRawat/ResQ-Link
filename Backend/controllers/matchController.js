@@ -280,10 +280,156 @@ async function getTriageStats(req, res) {
   }
 }
 
+/**
+ * DELETE /api/v1/matching/candidates/:id
+ *
+ * Deletes a match candidate from the triage console.
+ */
+async function deleteCandidate(req, res) {
+  try {
+    const { id } = req.params;
+    const candidate = await MatchCandidate.findByPk(id);
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: `Match candidate not found with ID: ${id}`,
+      });
+    }
+
+    await candidate.destroy();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Match candidate deleted successfully.',
+    });
+  } catch (error) {
+    console.error('✖  Delete candidate error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while deleting match candidate.',
+    });
+  }
+}
+
+/**
+ * POST /api/v1/matching/evaluate
+ *
+ * Directly evaluates multimodal profile matching of two persons' data
+ * via the AI sidecar service (/api/v1/evaluate-match).
+ *
+ * Accepts either:
+ * 1) DB Report IDs: { reportAId: "...", reportBId: "..." }
+ * 2) Raw profile payloads: { reportA: { firstName, ... }, reportB: { firstName, ... } }
+ */
+async function evaluateProfiles(req, res) {
+  try {
+    const { evaluateTwoProfiles } = require('../services/scoringService');
+    const { reportAId, reportBId, reportA, reportB } = req.body;
+
+    let candidateA = null;
+    let candidateB = null;
+
+    if (reportAId && reportBId) {
+      const [foundA, foundB] = await Promise.all([
+        Report.findByPk(reportAId),
+        Report.findByPk(reportBId),
+      ]);
+
+      if (!foundA || !foundB) {
+        return res.status(404).json({
+          success: false,
+          message: `One or both reports not found. (reportAId: ${reportAId}, reportBId: ${reportBId})`,
+        });
+      }
+
+      candidateA = foundA;
+      candidateB = foundB;
+    } else if (reportA && reportB) {
+      candidateA = reportA;
+      candidateB = reportB;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Please provide either (reportAId and reportBId) or (reportA and reportB) in request body.',
+      });
+    }
+
+    const evaluation = await evaluateTwoProfiles(candidateA, candidateB);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile match evaluated successfully via AI service.',
+      data: evaluation,
+    });
+  } catch (error) {
+    console.error('✖  Profile evaluation error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.response?.data?.detail || error.message || 'Failed to evaluate profile matching.',
+    });
+  }
+}
+
+/**
+ * GET /api/v1/matching/ai-health
+ *
+ * Pings the AI FastAPI service /health endpoint to check status.
+ */
+async function getAiHealth(req, res) {
+  try {
+    const { checkAiHealth } = require('../services/scoringService');
+    const health = await checkAiHealth();
+
+    return res.status(health.online ? 200 : 503).json({
+      success: health.online,
+      ai_service: health.online ? 'healthy' : 'unavailable',
+      data: health.data || null,
+      error: health.error || null,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/v1/matching/run/:reportId
+ *
+ * Manually triggers the coarse filter + AI matching pipeline for a report.
+ */
+async function triggerMatching(req, res) {
+  try {
+    const { findMatchesForReport } = require('../services/matchingOrchestrator');
+    const { reportId } = req.params;
+
+    const result = await findMatchesForReport(reportId);
+
+    return res.status(200).json({
+      success: true,
+      message: `Matching process executed for report ${reportId}.`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('✖  Trigger matching error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to execute matching for report.',
+    });
+  }
+}
+
 module.exports = {
   verifyMatch,
   getCandidates,
   getCandidateById,
   getTriageStats,
+  deleteCandidate,
+  evaluateProfiles,
+  getAiHealth,
+  triggerMatching,
 };
 

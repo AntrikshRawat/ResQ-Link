@@ -81,6 +81,15 @@ const Report = sequelize.define(
         isIn: [['UNMATCHED', 'PENDING_VERIFICATION', 'RESOLVED_LOCATED', 'CLOSED']],
       },
     },
+    user_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id',
+      },
+      onDelete: 'SET NULL',
+    },
   },
   {
     tableName: 'reports',
@@ -94,6 +103,10 @@ const Report = sequelize.define(
       {
         name: 'idx_reports_status',
         fields: ['status'],
+      },
+      {
+        name: 'idx_reports_user_id',
+        fields: ['user_id'],
       },
 
       // ── GIN trigram indexes (require pg_trgm extension) ───────────────

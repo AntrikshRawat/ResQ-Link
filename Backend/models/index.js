@@ -7,6 +7,7 @@ const sequelize = require('../config/database');
 const Report = require('./Report');
 const MasterPerson = require('./MasterPerson');
 const MatchCandidate = require('./MatchCandidate');
+const User = require('./User');
 
 // ── Associations ────────────────────────────────────────────────────────────
 
@@ -37,10 +38,23 @@ Report.hasMany(MatchCandidate, {
   as: 'matchesAsTarget',
 });
 
+// User → Report
+User.hasMany(Report, {
+  foreignKey: 'user_id',
+  as: 'reports',
+  onDelete: 'SET NULL',
+});
+
+Report.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
 // ── Export everything ───────────────────────────────────────────────────────
 module.exports = {
   sequelize,
   Report,
   MasterPerson,
   MatchCandidate,
+  User,
 };

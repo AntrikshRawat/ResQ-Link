@@ -1,7 +1,7 @@
 // ============================================================================
 // Service: Matching Orchestrator — Trigram Filtering & Candidate Creation
 // ============================================================================
-const { QueryTypes } = require('sequelize');
+const { QueryTypes, Op } = require('sequelize');
 const sequelize = require('../config/database');
 const { Report, MatchCandidate } = require('../models');
 const { evaluateMatch } = require('./scoringService');
@@ -85,7 +85,7 @@ async function findMatchesForReport(reportId) {
     const createdCandidates = [];
 
     for (const match of potentialMatches) {
-      const trigramScore = parseFloat(match.trigram_score);
+      const trigramScore = parseFloat(match.trigram_score) || 0;
 
       const scoringResult = await evaluateMatch(
         sourceReport,
@@ -93,24 +93,49 @@ async function findMatchesForReport(reportId) {
         trigramScore
       );
 
-      // Only persist candidates that meet the composite threshold
-      if (scoringResult.composite_score >= COMPOSITE_THRESHOLD) {
-        const candidate = await MatchCandidate.create({
-          source_report_id: reportId,
-          target_report_id: match.id,
-          composite_score: scoringResult.composite_score,
-          face_similarity_score: scoringResult.face_similarity_score,
-          phonetic_similarity_score: scoringResult.phonetic_similarity_score,
-          discrepancy_summary: scoringResult.discrepancy_summary,
-          status: 'PENDING_REVIEW',
+      // Only persist candidates that meet composite threshold or are flagged eligible
+      const isEligible =
+        scoringResult.is_eligible_for_review !== undefined
+          ? scoringResult.is_eligible_for_review
+          : scoringResult.composite_score >= COMPOSITE_THRESHOLD;
+
+      if (isEligible) {
+        // Prevent duplicate candidate records
+        const existing = await MatchCandidate.findOne({
+          where: {
+            [Op.or]: [
+              { source_report_id: reportId, target_report_id: match.id },
+              { source_report_id: match.id, target_report_id: reportId },
+            ],
+          },
         });
 
-        createdCandidates.push(candidate);
+        if (existing) {
+          await existing.update({
+            composite_score: scoringResult.composite_score,
+            face_similarity_score: scoringResult.face_similarity_score,
+            phonetic_similarity_score: scoringResult.phonetic_similarity_score,
+            discrepancy_summary: scoringResult.discrepancy_summary,
+            status: 'PENDING_REVIEW',
+          });
+          createdCandidates.push(existing);
+        } else {
+          const candidate = await MatchCandidate.create({
+            source_report_id: reportId,
+            target_report_id: match.id,
+            composite_score: scoringResult.composite_score,
+            face_similarity_score: scoringResult.face_similarity_score,
+            phonetic_similarity_score: scoringResult.phonetic_similarity_score,
+            discrepancy_summary: scoringResult.discrepancy_summary,
+            status: 'PENDING_REVIEW',
+          });
+          createdCandidates.push(candidate);
+        }
       }
     }
 
     console.log(
-      `✔  Created ${createdCandidates.length} match candidate(s) for report ${reportId}`
+      `✔  Persisted ${createdCandidates.length} qualifying match candidate(s) for report ${reportId}`
     );
 
     return {

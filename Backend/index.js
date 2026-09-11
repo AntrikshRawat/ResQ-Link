@@ -30,7 +30,9 @@ const matchRoutes = require('./routes/matchRoutes');
 const trackRoutes = require('./routes/trackRoutes');
 const personRoutes = require('./routes/personRoutes');
 const metricsRoutes = require('./routes/metricsRoutes');
+const authRoutes = require('./routes/authRoutes');
 
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/intake', reportRoutes);
 app.use('/api/v1/matching', matchRoutes);
 app.use('/api/v1/triage', matchRoutes); // Alias for triage console
@@ -49,6 +51,19 @@ app.use('/api/v1/metrics', metricsRoutes); // Dashboard metrics overview
     // Sync all models — use { alter: true } in dev, migrations in prod
     await sequelize.sync({ alter: true });
     console.log('✔  Database synced');
+
+    // Ensure a default admin account exists for testing admin login
+    const { User } = require('./models');
+    const adminCount = await User.count({ where: { role: 'ADMIN' } });
+    if (adminCount === 0) {
+      await User.create({
+        full_name: 'ResQ-Link Admin',
+        email: 'admin@resqlink.org',
+        password: 'Admin@123456',
+        role: 'ADMIN',
+      });
+      console.log('✔  Default admin created: admin@resqlink.org / Admin@123456');
+    }
 
     app.listen(PORT, () => {
       console.log(`✔  ResQ-Link API listening on http://localhost:${PORT}`);

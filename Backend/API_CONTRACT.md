@@ -505,22 +505,199 @@ The `timeline` array always has 4 milestones. The `reached` flags are set based 
 
 ---
 
+---
+
+### 9. Delete Triage Candidate
+
+| | |
+|---|---|
+| **Method** | `DELETE` |
+| **URL** | `/api/v1/matching/candidates/:id` |
+| **Connected Screen** | `/dashboard/triage` |
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Match candidate deleted successfully."
+}
+```
+
+---
+
+### 10. Delete Record (Master Person or Intake Report)
+
+| | |
+|---|---|
+| **Method** | `DELETE` |
+| **URL** | `/api/v1/persons/:id` (alias: `/api/v1/records/:id`) |
+| **Connected Screen** | `/dashboard/records` |
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Record deleted successfully."
+}
+```
+
+---
+
+---
+
+### 11. User Registration (Signup)
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/v1/auth/signup` |
+| **Content-Type** | `application/json` |
+| **Description** | Registers a new normal user account (`role = "USER"`). Admin accounts cannot be created here. |
+
+#### Request Body
+
+```json
+{
+  "full_name": "Antriksh Rawat",
+  "email": "antriksh@example.com",
+  "password": "securepassword123"
+}
+```
+
+#### Success Response — `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "Account created successfully.",
+  "data": {
+    "token": "eyJhbGciOi...",
+    "user": {
+      "id": "0588f47c-725c-4670-87ec-ba8e6fe24640",
+      "full_name": "Antriksh Rawat",
+      "email": "antriksh@example.com",
+      "role": "USER",
+      "createdAt": "2026-09-11T19:54:57.149Z"
+    }
+  }
+}
+```
+
+---
+
+### 12. User Login
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/v1/auth/login` |
+| **Content-Type** | `application/json` |
+| **Description** | Authenticates a registered user or administrator. |
+
+#### Request Body
+
+```json
+{
+  "email": "antriksh@example.com",
+  "password": "securepassword123"
+}
+```
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Login successful.",
+  "data": {
+    "token": "eyJhbGciOi...",
+    "user": {
+      "id": "0588f47c-725c-4670-87ec-ba8e6fe24640",
+      "full_name": "Antriksh Rawat",
+      "email": "antriksh@example.com",
+      "role": "USER",
+      "createdAt": "2026-09-11T19:54:57.149Z"
+    }
+  }
+}
+```
+
+---
+
+### 13. Admin Login (Dedicated)
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/v1/auth/admin/login` |
+| **Content-Type** | `application/json` |
+| **Description** | Authenticates an administrator account. Rejects normal `USER` accounts with `403 Forbidden`. |
+
+#### Request Body
+
+```json
+{
+  "email": "admin@resqlink.org",
+  "password": "Admin@123456"
+}
+```
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Admin login successful.",
+  "data": {
+    "token": "eyJhbGciOi...",
+    "user": {
+      "id": "8fa46fa9-4364-44e0-b452-54751ad29daa",
+      "full_name": "ResQ-Link Admin",
+      "email": "admin@resqlink.org",
+      "role": "ADMIN",
+      "createdAt": "2026-09-11T19:54:44.070Z"
+    }
+  }
+}
+```
+
+#### Error Response — Non-Admin Account (`403 Forbidden`)
+
+```json
+{
+  "success": false,
+  "message": "Access denied. This portal is restricted to administrator accounts only."
+}
+```
+
+---
+
 ## Quick Reference
 
 | # | Method | Endpoint | Screen | Purpose |
 |---|---|---|---|---|
-| 1 | `POST` | `/api/v1/intake/report` | `/report/missing`, `/report/rescued` | Submit a new report |
-| 2 | `GET` | `/api/v1/track/:trackingCode` | `/track/[code]` | Family status lookup |
-| 3 | `GET` | `/api/v1/matching/candidates` | `/dashboard/triage` | Match cards for triage |
-| 4 | `GET` | `/api/v1/matching/stats` | `/dashboard/triage` | Triage counts summary |
-| 5 | `POST` | `/api/v1/matching/verify` | `/dashboard/triage` | Approve or dismiss a match |
-| 6 | `GET` | `/api/v1/persons` | `/dashboard/records` | Master registry records |
-| 7 | `GET` | `/api/v1/persons/:id` | `/dashboard/records` | Person details & merged reports |
-| 8 | `GET` | `/api/v1/metrics` | Home (`/`) | Live counters overview |
+| 1 | `POST` | `/api/v1/auth/signup` | `/signup` | Normal user registration |
+| 2 | `POST` | `/api/v1/auth/login` | `/login` | Normal user / general login |
+| 3 | `POST` | `/api/v1/auth/admin/login` | `/admin/login` | Admin login only |
+| 4 | `POST` | `/api/v1/intake/report` | `/report/missing`, `/report/rescued` | Submit a new report |
+| 5 | `GET` | `/api/v1/track/:trackingCode` | `/track/[code]` | Family status lookup |
+| 6 | `GET` | `/api/v1/matching/candidates` | `/dashboard/triage` | Match cards for triage |
+| 7 | `GET` | `/api/v1/matching/stats` | `/dashboard/triage` | Triage counts summary |
+| 8 | `POST` | `/api/v1/matching/verify` | `/dashboard/triage` | Approve or dismiss a match |
+| 9 | `DELETE`| `/api/v1/matching/candidates/:id` | `/dashboard/triage` | Permanently delete candidate |
+| 10| `GET` | `/api/v1/persons` | `/dashboard/records` | Unified registry records |
+| 11| `GET` | `/api/v1/persons/:id` | `/dashboard/records` | Person details & merged reports |
+| 12| `DELETE`| `/api/v1/persons/:id` | `/dashboard/records` | Permanently delete record |
+| 13| `GET` | `/api/v1/metrics` | Home (`/`) | Live counters overview |
 
 ---
 
 ## Enum Reference
+
+### `role` (User)
+`USER` · `ADMIN`
 
 ### `report_type`
 `MISSING` · `RESCUED` · `HOSPITAL_PATIENT` · `UNIDENTIFIED_BODY`

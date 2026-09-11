@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import ConfidenceGauge from "@/components/triage/ConfidenceGauge";
 import DiscrepancyBadges from "@/components/triage/DiscrepancyBadges";
-import { LuCircleCheck, LuCircleX, LuFlag, LuUser, LuMapPin, LuCalendar } from "react-icons/lu";
+import { LuCircleCheck, LuCircleX, LuFlag, LuUser, LuMapPin, LuCalendar, LuTrash2 } from "react-icons/lu";
 import { BACKEND_URL } from "@/lib/api";
 
 /**
  * Split-screen comparison card for triage review.
- * @param {{ match: object, onApprove: () => void, onDismiss: () => void, isLoading?: boolean }} props
+ * @param {{ match: object, onApprove: () => void, onDismiss: () => void, onDelete: () => void, isLoading?: boolean }} props
  */
-export default function MatchCard({ match, onApprove, onDismiss, isLoading = false }) {
+export default function MatchCard({ match, onApprove, onDismiss, onDelete, isLoading = false }) {
   const { sourceReport, targetReport } = match;
 
   return (
@@ -62,12 +62,34 @@ export default function MatchCard({ match, onApprove, onDismiss, isLoading = fal
         {/* Actions or Status */}
         <div className="flex gap-2 border-t border-border bg-muted/20 p-4">
           {match.status === "APPROVED" ? (
-            <div className="flex w-full items-center justify-center gap-2 text-sm font-semibold text-green-600">
-              <LuCircleCheck className="h-5 w-5" /> Adjudicated: Approved & Merged
+            <div className="flex w-full items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-green-600">
+                <LuCircleCheck className="h-5 w-5" /> Adjudicated: Approved & Merged
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={onDelete}
+                disabled={isLoading}
+              >
+                <LuTrash2 className="h-4 w-4" /> Delete Candidate
+              </Button>
             </div>
           ) : match.status === "DISMISSED" ? (
-            <div className="flex w-full items-center justify-center gap-2 text-sm font-semibold text-muted-foreground">
-              <LuCircleX className="h-5 w-5" /> Adjudicated: Dismissed
+            <div className="flex w-full items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                <LuCircleX className="h-5 w-5" /> Adjudicated: Dismissed
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={onDelete}
+                disabled={isLoading}
+              >
+                <LuTrash2 className="h-4 w-4" /> Delete Candidate
+              </Button>
             </div>
           ) : (
             <>
@@ -82,12 +104,22 @@ export default function MatchCard({ match, onApprove, onDismiss, isLoading = fal
               </Button>
               <Button
                 variant="outline"
-                className="flex-1 border-red-500/30 text-red-600 hover:bg-red-500/10 hover:text-red-700"
+                className="flex-1 border-amber-500/30 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
                 onClick={onDismiss}
                 disabled={isLoading}
               >
                 <LuCircleX className="mr-2 h-4 w-4" />
                 Dismiss
+              </Button>
+              <Button
+                variant="outline"
+                className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={onDelete}
+                disabled={isLoading}
+                title="Delete Candidate"
+              >
+                <LuTrash2 className="mr-1.5 h-4 w-4" />
+                Delete
               </Button>
             </>
           )}

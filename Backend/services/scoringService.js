@@ -2,66 +2,149 @@
 // Service: Scoring Service — AI Sidecar Dispatch & Fallback
 // ============================================================================
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 
-const AI_SIDECAR_URL = 'http://localhost:8000/api/v1/evaluate-match';
-const AI_TIMEOUT_MS = 2000;
+const AI_SIDECAR_URL =
+  process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000/api/v1/evaluate-match';
+const AI_HEALTH_URL =
+  process.env.AI_HEALTH_URL || 'http://127.0.0.1:8000/health';
+const AI_TIMEOUT_MS = parseInt(process.env.AI_TIMEOUT_MS, 10) || 10000;
+
+/**
+ * Resolves an image path string to an accessible file path.
+ * Checks absolute path, backend root relative, and uploads folder relative.
+ *
+ * @param {string|null} rawPath
+ * @returns {string|null} Resolved file path or original string/null
+ */
+function resolvePhotoPath(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') return null;
+
+  try {
+    // 1. Direct absolute path check
+    if (path.isAbsolute(rawPath) && fs.existsSync(rawPath)) {
+      return path.resolve(rawPath);
+    }
+
+    // 2. Relative to backend directory (e.g., "uploads/123.jpg")
+    const backendResolved = path.resolve(__dirname, '..', rawPath);
+    if (fs.existsSync(backendResolved)) {
+      return backendResolved;
+    }
+
+    // 3. Relative to backend uploads directory (e.g., "123.jpg")
+    const uploadsResolved = path.resolve(__dirname, '..', 'uploads', rawPath);
+    if (fs.existsSync(uploadsResolved)) {
+      return uploadsResolved;
+    }
+
+    // 4. Return original if no file found locally
+    return rawPath;
+  } catch (err) {
+    return rawPath;
+  }
+}
+
+/**
+ * Formats a report or profile object into the ReportCandidateInput schema
+ * required by the FastAPI AI service.
+ *
+ * @param {object} report - Sequelize model or plain object
+ * @returns {object} Formatted candidate object matching FastAPI schema
+ */
+function formatReportCandidate(report) {
+  if (!report) {
+    throw new Error('Report data is required for matching evaluation.');
+  }
+
+  const raw = typeof report.toJSON === 'function' ? report.toJSON() : report;
+
+  const firstName = (raw.first_name || raw.firstName || '').trim();
+  const lastName = (raw.last_name || raw.lastName || '').trim() || null;
+  const age =
+    raw.approximate_age !== undefined && raw.approximate_age !== null
+      ? Number(raw.approximate_age)
+      : raw.approximateAge !== undefined && raw.approximateAge !== null
+      ? Number(raw.approximateAge)
+      : null;
+
+  return {
+    id: raw.id ? String(raw.id) : undefined,
+    firstName: firstName || 'Unknown',
+    lastName: lastName,
+    approximateAge: isNaN(age) ? null : age,
+    distinguishingMarks: raw.distinguishing_marks || raw.distinguishingMarks || null,
+    clothingDescription: raw.clothing_description || raw.clothingDescription || null,
+    photoPath: resolvePhotoPath(raw.photo_path || raw.photoPath),
+  };
+}
 
 /**
  * Dispatches a match evaluation request to the Python AI sidecar.
- * Falls back to a degraded text-only score if the sidecar is unavailable.
+ * Evaluates face, phonetic, demographic, and physical marks similarity.
+ * Falls back to degraded text-only score if the sidecar is unavailable.
  *
- * @param {object} sourceReport - The report being searched for (Sequelize instance or plain object).
+ * @param {object} sourceReport - The report being searched for.
  * @param {object} targetReport - A potential match report from the database.
- * @param {number} dbTrigramScore - The pg_trgm similarity score from the coarse filter query.
+ * @param {number} dbTrigramScore - The pg_trgm similarity score from coarse filter query.
  * @returns {Promise<object>} Scoring result with composite_score, component scores, and discrepancy_summary.
  */
-async function evaluateMatch(sourceReport, targetReport, dbTrigramScore) {
+async function evaluateMatch(sourceReport, targetReport, dbTrigramScore = 0) {
   try {
-    // ── Build the payload for the AI sidecar ────────────────────────────
-    const payload = {
-      source: {
-        photo_path: sourceReport.photo_path || null,
-        first_name: sourceReport.first_name,
-        last_name: sourceReport.last_name || null,
-        approximate_age: sourceReport.approximate_age,
-      },
-      target: {
-        photo_path: targetReport.photo_path || null,
-        first_name: targetReport.first_name,
-        last_name: targetReport.last_name || null,
-        approximate_age: targetReport.approximate_age,
-      },
-    };
+    const reportA = formatReportCandidate(sourceReport);
+    const reportB = formatReportCandidate(targetReport);
 
-    // ── Dispatch to AI sidecar with strict timeout ──────────────────────
+    const payload = { reportA, reportB };
+
     const response = await axios.post(AI_SIDECAR_URL, payload, {
       timeout: AI_TIMEOUT_MS,
+      headers: { 'Content-Type': 'application/json' },
     });
 
     const {
-      composite_score,
-      face_similarity,
-      demographic_similarity,
-      has_face,
+      compositeScore,
+      faceSimilarity,
+      phoneticSimilarity,
+      demographicScore,
+      marksScore,
+      isEligibleForReview,
+      isDegradedTextOnly,
+      faceDetectedA,
+      faceDetectedB,
+      phoneticKeysA,
+      phoneticKeysB,
+      ageDelta,
+      discrepancies,
     } = response.data;
 
-    // ── Build discrepancy summary from the AI response ──────────────────
     const discrepancy_summary = {
-      mode: 'AI_FULL',
-      face_similarity,
-      demographic_similarity,
-      has_face,
+      mode: isDegradedTextOnly ? 'AI_TEXT_ONLY' : 'AI_MULTIMODAL',
+      face_detected_a: faceDetectedA,
+      face_detected_b: faceDetectedB,
+      phonetic_keys_a: phoneticKeysA,
+      phonetic_keys_b: phoneticKeysB,
+      age_delta: ageDelta,
+      demographic_score: demographicScore,
+      marks_score: marksScore,
+      is_eligible_for_review: isEligibleForReview,
+      is_degraded_text_only: isDegradedTextOnly,
       db_trigram_score: dbTrigramScore,
+      ...(discrepancies || {}),
     };
 
     return {
-      composite_score,
-      face_similarity_score: face_similarity,
-      phonetic_similarity_score: demographic_similarity,
+      composite_score: compositeScore,
+      face_similarity_score: faceSimilarity,
+      phonetic_similarity_score: phoneticSimilarity,
+      demographic_score: demographicScore,
+      marks_score: marksScore,
+      is_eligible_for_review: isEligibleForReview,
+      is_degraded_text_only: isDegradedTextOnly,
       discrepancy_summary,
+      raw_ai_response: response.data,
     };
   } catch (error) {
-    // ── Fallback: degraded text-only scoring ─────────────────────────────
     const isTimeout =
       error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
 
@@ -70,8 +153,6 @@ async function evaluateMatch(sourceReport, targetReport, dbTrigramScore) {
         'Falling back to degraded text-only scoring.'
     );
 
-    // Degraded composite score derived solely from the trigram similarity.
-    // We cap it at 0.85 so a text-only match can never outrank an AI-scored one.
     const degradedComposite = Math.min(dbTrigramScore * 0.9, 0.85);
 
     const discrepancy_summary = {
@@ -85,9 +166,61 @@ async function evaluateMatch(sourceReport, targetReport, dbTrigramScore) {
       composite_score: parseFloat(degradedComposite.toFixed(4)),
       face_similarity_score: null,
       phonetic_similarity_score: dbTrigramScore,
+      demographic_score: null,
+      marks_score: null,
+      is_eligible_for_review: degradedComposite >= 0.60,
+      is_degraded_text_only: true,
       discrepancy_summary,
     };
   }
 }
 
-module.exports = { evaluateMatch };
+/**
+ * Direct evaluation helper for two arbitrary person profiles.
+ * Can be used by API controllers or testing tools to compare any two profiles.
+ *
+ * @param {object} profileA - First person profile
+ * @param {object} profileB - Second person profile
+ * @returns {Promise<object>} Complete evaluation response
+ */
+async function evaluateTwoProfiles(profileA, profileB) {
+  const reportA = formatReportCandidate(profileA);
+  const reportB = formatReportCandidate(profileB);
+
+  const payload = { reportA, reportB };
+
+  const response = await axios.post(AI_SIDECAR_URL, payload, {
+    timeout: AI_TIMEOUT_MS,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  return response.data;
+}
+
+/**
+ * Checks connectivity and health of the AI matching sidecar.
+ *
+ * @returns {Promise<object>} Health status
+ */
+async function checkAiHealth() {
+  try {
+    const response = await axios.get(AI_HEALTH_URL, { timeout: 3000 });
+    return {
+      online: true,
+      data: response.data,
+    };
+  } catch (error) {
+    return {
+      online: false,
+      error: error.message,
+    };
+  }
+}
+
+module.exports = {
+  evaluateMatch,
+  evaluateTwoProfiles,
+  checkAiHealth,
+  formatReportCandidate,
+  resolvePhotoPath,
+};
