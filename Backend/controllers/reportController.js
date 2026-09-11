@@ -3,6 +3,7 @@
 // ============================================================================
 const { Report } = require('../models');
 const { generateTrackingCode } = require('../utils/trackingCode');
+const { findMatchesForReport } = require('../services/matchingOrchestrator');
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,11 @@ async function createReport(req, res) {
       is_minor,
     });
 
+    // Fire-and-forget: trigger the matching engine in the background.
+    // Do NOT await — the client gets their 201 response immediately.
+    findMatchesForReport(report.id).catch((err) =>
+      console.error('✖  Background matching failed:', err)
+    );
     // 7. Respond with the tracking code
     return res.status(201).json({
       success: true,

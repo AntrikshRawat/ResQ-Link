@@ -1,0 +1,182 @@
+// ============================================================================
+// Controller: Match Verification — Atomic HITL Merge Engine
+// ============================================================================
+const sequelize = require('../config/database');
+const { MatchCandidate, Report, MasterPerson } = require('../models');
+
+/**
+ * POST /api/v1/matching/verify
+ *
+ * Processes a human-in-the-loop decision on a MatchCandidate.
+ * - DISMISS → marks the candidate as dismissed.
+ * - APPROVE → merges both reports into a new MasterPerson record,
+ *   marks reports as RESOLVED_LOCATED, all inside an atomic transaction.
+ */
+async function verifyMatch(req, res) {
+  const { candidate_id, decision } = req.body;
+
+  // ── Input validation ────────────────────────────────────────────────────
+  if (!candidate_id || !decision) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing required fields: candidate_id and decision are required.',
+    });
+  }
+
+  if (!['APPROVE', 'DISMISS'].includes(decision)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid decision. Must be 'APPROVE' or 'DISMISS'.",
+    });
+  }
+
+  try {
+    const result = await sequelize.transaction(async (t) => {
+      // ── 1. Fetch the candidate with both associated reports ───────────
+      const candidate = await MatchCandidate.findByPk(candidate_id, {
+        include: [
+          { model: Report, as: 'sourceReport' },
+          { model: Report, as: 'targetReport' },
+        ],
+        transaction: t,
+      });
+
+      if (!candidate) {
+        const err = new Error(`MatchCandidate not found: ${candidate_id}`);
+        err.statusCode = 404;
+        throw err;
+      }
+
+      // ── 2. Handle DISMISS ─────────────────────────────────────────────
+      if (decision === 'DISMISS') {
+        candidate.status = 'DISMISSED';
+        await candidate.save({ transaction: t });
+
+        return { dismissed: true };
+      }
+
+      // ── 3. Handle APPROVE — atomic merge ──────────────────────────────
+      const { sourceReport, targetReport } = candidate;
+
+      // 3a. Update the candidate status
+      candidate.status = 'APPROVED';
+      await candidate.save({ transaction: t });
+
+      // 3b. Mark both reports as resolved
+      sourceReport.status = 'RESOLVED_LOCATED';
+      targetReport.status = 'RESOLVED_LOCATED';
+
+      await sourceReport.save({ transaction: t });
+      await targetReport.save({ transaction: t });
+
+      // 3c. Create the unified MasterPerson record
+      const masterPerson = await MasterPerson.create(
+        {
+          canonical_first_name: sourceReport.first_name,
+          canonical_last_name: sourceReport.last_name,
+          confirmed_status: 'SHELTERED',
+          current_facility: targetReport.last_known_location,
+          primary_photo_path: sourceReport.photo_path || targetReport.photo_path || null,
+          merged_report_ids: [sourceReport.id, targetReport.id],
+        },
+        { transaction: t }
+      );
+
+      return { dismissed: false, masterPerson };
+    });
+
+    // ── 4. Return the appropriate response ──────────────────────────────
+    if (result.dismissed) {
+      return res.status(200).json({
+        success: true,
+        message: 'Match candidate dismissed.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Match approved. Reports merged into a unified person record.',
+      data: {
+        master_person_id: result.masterPerson.id,
+      },
+    });
+  } catch (error) {
+    console.error('✖  Match verification error:', error);
+
+    // Surface known status codes (e.g. 404 for missing candidate)
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      success: false,
+      message: statusCode === 500 ? 'Internal server error.' : error.message,
+    });
+  }
+}
+
+
+
+/**
+ * GET /api/v1/matching/candidates
+ *
+ * Returns pending match candidates for the triage console.
+ * Supports optional query params:
+ *   - minScore (default 0.60) — minimum composite_score filter
+ *   - limit    (default 20)   — max rows returned
+ */
+async function getCandidates(req, res) {
+  try {
+    const minScore = parseFloat(req.query.minScore) || 0.60;
+    const limit = parseInt(req.query.limit, 10) || 20;
+
+    const candidates = await MatchCandidate.findAll({
+      where: {
+        status: 'PENDING_REVIEW',
+        composite_score: { [require('sequelize').Op.gte]: minScore },
+      },
+      include: [
+        {
+          model: Report,
+          as: 'sourceReport',
+          attributes: [
+            'id',
+            'first_name',
+            'last_name',
+            'approximate_age',
+            'photo_path',
+            'last_known_location',
+            'report_type',
+          ],
+        },
+        {
+          model: Report,
+          as: 'targetReport',
+          attributes: [
+            'id',
+            'first_name',
+            'last_name',
+            'approximate_age',
+            'photo_path',
+            'last_known_location',
+            'report_type',
+          ],
+        },
+      ],
+      order: [['composite_score', 'DESC']],
+      limit,
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: candidates.length,
+      data: candidates,
+    });
+  } catch (error) {
+    console.error('✖  Get candidates error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error.',
+    });
+  }
+}
+
+module.exports = { verifyMatch, getCandidates };
+

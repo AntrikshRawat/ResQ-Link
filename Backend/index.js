@@ -26,7 +26,11 @@ app.get('/health', (_req, res) => {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 const reportRoutes = require('./routes/reportRoutes');
+const matchRoutes = require('./routes/matchRoutes');
+const trackRoutes = require('./routes/trackRoutes');
 app.use('/api/v1/intake', reportRoutes);
+app.use('/api/v1/matching', matchRoutes);
+app.use('/api/v1/track', trackRoutes);
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 (async () => {
