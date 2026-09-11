@@ -1,44 +1,81 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import ProgressTimeline from "@/components/tracking/ProgressTimeline";
 import StatusBadge from "@/components/tracking/StatusBadge";
-import { mockReports } from "@/lib/mock-data";
-import { LuPhone, LuMail, LuShield, LuMapPin, LuUser, LuCalendar } from "react-icons/lu";
-
-// In production, this would use TanStack Query with refetchInterval: 5000
-// to poll the GET /api/v1/reports/track/:code endpoint.
+import { getReportByTrackingCode, BACKEND_URL } from "@/lib/api";
+import { LuPhone, LuMail, LuShield, LuMapPin, LuUser, LuCalendar, LuLoader } from "react-icons/lu";
 
 export default function TrackingPage() {
   const params = useParams();
   const code = params.code;
 
-  // Mock: find report by tracking code
-  const report = mockReports.find((r) => r.tracking_code === code);
+  const {
+    data: response,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["track", code],
+    queryFn: () => getReportByTrackingCode(code),
+    enabled: !!code,
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+  });
 
-  if (!report) {
+  // ── Loading State ────────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 text-center sm:py-24">
+        <LuLoader className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="mt-4 text-muted-foreground">Looking up your report…</p>
+      </div>
+    );
+  }
+
+  // ── Error / Not Found State ──────────────────────────────────────────────
+  if (isError) {
+    const is404 = error?.status === 404;
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center sm:py-24">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
           <LuShield className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h1 className="mt-6 text-2xl font-bold">Report Not Found</h1>
+        <h1 className="mt-6 text-2xl font-bold">
+          {is404 ? "Report Not Found" : "Something went wrong"}
+        </h1>
         <p className="mt-2 text-muted-foreground">
-          No report found with tracking code{" "}
-          <span className="font-mono font-semibold">{code}</span>. Please
-          double-check the code and try again.
+          {is404 ? (
+            <>
+              No report found with tracking code{" "}
+              <span className="font-mono font-semibold">{code}</span>. Please
+              double-check the code and try again.
+            </>
+          ) : (
+            error?.message || "Unable to fetch tracking information. Please try again later."
+          )}
         </p>
       </div>
     );
   }
 
-  const ageDisplay = report.is_minor
+  // ── Data ──────────────────────────────────────────────────────────────────
+  const report = response.data;
+  const details = report.details;
+
+  const isMinor = details.approximate_age != null && details.approximate_age < 18;
+  const ageDisplay = isMinor
     ? "Under 18"
-    : report.approximate_age
-    ? `~${report.approximate_age} years`
+    : details.approximate_age
+    ? `~${details.approximate_age} years`
     : "Unknown";
+
+  const photoUrl = details.photo_path
+    ? `${BACKEND_URL}/${details.photo_path}`
+    : null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:py-16">
@@ -75,7 +112,7 @@ export default function TrackingPage() {
                 <LuUser className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Name</span>
                 <span className="ml-auto font-medium">
-                  {report.first_name} {report.last_name || ""}
+                  {details.first_name} {details.last_name || ""}
                 </span>
               </div>
               <Separator />
@@ -89,21 +126,28 @@ export default function TrackingPage() {
                 <LuMapPin className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Location</span>
                 <span className="ml-auto font-medium text-right max-w-[60%]">
-                  {report.is_minor
+                  {isMinor
                     ? "Withheld for minor protection"
                     : report.status === "RESOLVED_LOCATED"
-                    ? report.last_known_location
+                    ? details.last_known_location
                     : "Will be shared once located"}
                 </span>
               </div>
-              <Separator />
-              <div className="flex items-center gap-3">
-                <LuShield className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Report Type</span>
-                <span className="ml-auto font-medium capitalize">
-                  {report.report_type.toLowerCase()}
-                </span>
-              </div>
+              {photoUrl && (
+                <>
+                  <Separator />
+                  <div className="mt-2 overflow-hidden rounded-lg">
+                    <img
+                      src={photoUrl}
+                      alt={`Photo of ${details.first_name}`}
+                      className="h-48 w-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                      }}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

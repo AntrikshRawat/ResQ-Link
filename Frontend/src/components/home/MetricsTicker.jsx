@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { LuFileText, LuUsers, LuSearch, LuHeart } from "react-icons/lu";
-import { mockMetrics } from "@/lib/mock-data";
+import { getMetrics } from "@/lib/api";
 
 const metrics = [
   {
@@ -37,34 +38,31 @@ const metrics = [
 ];
 
 /** Animated counter that counts up to the target value */
-function AnimatedCounter({ target, duration = 2000 }) {
+function AnimatedCounter({ target = 0, duration = 1500 }) {
   const [count, setCount] = useState(0);
   const ref = useRef(null);
-  const hasAnimated = useRef(false);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated.current) {
-          hasAnimated.current = true;
-          const startTime = performance.now();
-          function animate(currentTime) {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            // Ease-out cubic
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setCount(Math.floor(eased * target));
-            if (progress < 1) {
-              requestAnimationFrame(animate);
-            }
-          }
-          requestAnimationFrame(animate);
-        }
-      },
-      { threshold: 0.3 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
+    const endVal = Number(target) || 0;
+    if (endVal === 0) {
+      setCount(0);
+      return;
+    }
+
+    const startTime = performance.now();
+    let animationFrame;
+
+    function step(timestamp) {
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.floor(eased * endVal));
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(step);
+      }
+    }
+
+    animationFrame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(animationFrame);
   }, [target, duration]);
 
   return (
@@ -75,6 +73,19 @@ function AnimatedCounter({ target, duration = 2000 }) {
 }
 
 export default function MetricsTicker() {
+  const { data } = useQuery({
+    queryKey: ["metrics"],
+    queryFn: () => getMetrics(),
+    retry: 1,
+  });
+
+  const metricsData = {
+    total_reports: data?.total_reports ?? data?.totalReports ?? 0,
+    people_matched: data?.people_matched ?? data?.peopleMatched ?? 0,
+    active_searches: data?.active_searches ?? data?.activeSearches ?? 0,
+    families_reunited: data?.families_reunited ?? data?.familiesReunited ?? 0,
+  };
+
   return (
     <section className="py-12 sm:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -93,7 +104,7 @@ export default function MetricsTicker() {
                     <Icon className={`h-5 w-5 ${metric.color}`} />
                   </div>
                   <span className="text-2xl font-bold sm:text-3xl">
-                    <AnimatedCounter target={mockMetrics[metric.key]} />
+                    <AnimatedCounter target={metricsData[metric.key] || 0} />
                   </span>
                   <span className="text-xs font-medium text-muted-foreground sm:text-sm">
                     {metric.label}

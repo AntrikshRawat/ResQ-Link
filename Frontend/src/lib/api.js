@@ -5,7 +5,15 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
 
 /**
+ * Base URL of the backend server (without /api/v1).
+ * Used for resolving static assets like uploaded photos.
+ * Example: `${BACKEND_URL}/${report.photo_path}`
+ */
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
+
+/**
  * Generic fetch wrapper with error handling.
+ * Extracts the server's error message from the JSON response body when possible.
  * @param {string} endpoint - API path (e.g. "/intake/report")
  * @param {RequestInit} options - fetch options
  * @returns {Promise<any>} parsed JSON response
@@ -23,13 +31,27 @@ async function apiFetch(endpoint, options = {}) {
     ...options,
   };
 
-  const response = await fetch(url, config);
+  let response;
+  try {
+    response = await fetch(url, config);
+  } catch (networkError) {
+    // Network-level failure (server down, CORS, DNS, etc.)
+    throw new Error(
+      "Unable to reach the server. Please check your connection and try again."
+    );
+  }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      message: `HTTP ${response.status}: ${response.statusText}`,
-    }));
-    throw new Error(error.message || "API request failed");
+    // Try to extract the backend's error message
+    const errorBody = await response.json().catch(() => null);
+    const message =
+      errorBody?.message ||
+      errorBody?.errors?.join(", ") ||
+      `HTTP ${response.status}: ${response.statusText}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.body = errorBody;
+    throw error;
   }
 
   return response.json();
@@ -45,30 +67,44 @@ export async function createReport(formData) {
   });
 }
 
-/** Fetch a report by tracking code */
+/** Fetch a report's status and timeline by tracking code */
 export async function getReportByTrackingCode(code) {
-  return apiFetch(`/reports/track/${code}`);
-}
-
-/** Fetch all reports with optional filters */
-export async function getReports(params = {}) {
-  const query = new URLSearchParams(params).toString();
-  return apiFetch(`/reports${query ? `?${query}` : ""}`);
+  return apiFetch(`/track/${code}`);
 }
 
 // ── Match Candidate Endpoints ───────────────────────────────────────────────
 
-/** Fetch pending match candidates for triage */
+/**
+ * Fetch match candidates for triage.
+ * @param {{ minScore?: number, limit?: number, status?: string }} params
+ */
 export async function getMatchCandidates(params = {}) {
   const query = new URLSearchParams(params).toString();
-  return apiFetch(`/matches${query ? `?${query}` : ""}`);
+  return apiFetch(`/matching/candidates${query ? `?${query}` : ""}`);
 }
 
-/** Approve or dismiss a match candidate */
-export async function updateMatchStatus(matchId, status, reviewedBy) {
-  return apiFetch(`/matches/${matchId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ status, reviewed_by: reviewedBy }),
+/** Fetch a single match candidate by ID */
+export async function getMatchCandidate(id) {
+  return apiFetch(`/matching/candidates/${id}`);
+}
+
+/** Fetch triage statistics (pending, approved, dismissed counts) */
+export async function getTriageStats() {
+  return apiFetch("/matching/stats");
+}
+
+/**
+ * Approve or dismiss a match candidate (HITL verification).
+ * @param {string} candidateId - UUID of the MatchCandidate
+ * @param {"APPROVE" | "DISMISS"} decision
+ */
+export async function verifyMatch(candidateId, decision) {
+  return apiFetch("/matching/verify", {
+    method: "POST",
+    body: JSON.stringify({
+      candidate_id: candidateId,
+      decision,
+    }),
   });
 }
 

@@ -28,9 +28,16 @@ app.get('/health', (_req, res) => {
 const reportRoutes = require('./routes/reportRoutes');
 const matchRoutes = require('./routes/matchRoutes');
 const trackRoutes = require('./routes/trackRoutes');
+const personRoutes = require('./routes/personRoutes');
+const metricsRoutes = require('./routes/metricsRoutes');
+
 app.use('/api/v1/intake', reportRoutes);
 app.use('/api/v1/matching', matchRoutes);
+app.use('/api/v1/triage', matchRoutes); // Alias for triage console
 app.use('/api/v1/track', trackRoutes);
+app.use('/api/v1/persons', personRoutes); // Master person record registry
+app.use('/api/v1/records', personRoutes); // Alias for record registry
+app.use('/api/v1/metrics', metricsRoutes); // Dashboard metrics overview
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 (async () => {

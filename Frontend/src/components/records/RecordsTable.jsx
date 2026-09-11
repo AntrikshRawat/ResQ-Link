@@ -75,15 +75,17 @@ export default function RecordsTable({ data, page, onPageChange, onView }) {
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-center">
                     <Badge variant="secondary">
-                      {person.merged_report_ids.length}
+                      {person.merged_report_ids?.length || 0}
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                    {new Date(person.updatedAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {person.updatedAt
+                      ? new Date(person.updatedAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "—"}
                   </TableCell>
                   <TableCell>
                     <Button

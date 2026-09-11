@@ -117,47 +117,56 @@ async function verifyMatch(req, res) {
 /**
  * GET /api/v1/matching/candidates
  *
- * Returns pending match candidates for the triage console.
+ * Returns match candidates for the triage console.
  * Supports optional query params:
  *   - minScore (default 0.60) — minimum composite_score filter
  *   - limit    (default 20)   — max rows returned
+ *   - status   (default PENDING_REVIEW, or ALL / APPROVED / DISMISSED)
  */
 async function getCandidates(req, res) {
   try {
-    const minScore = parseFloat(req.query.minScore) || 0.60;
+    const { Op } = require('sequelize');
+    const minScore = req.query.minScore !== undefined ? parseFloat(req.query.minScore) : 0.60;
     const limit = parseInt(req.query.limit, 10) || 20;
+    const statusParam = req.query.status ? req.query.status.toUpperCase() : 'PENDING_REVIEW';
+
+    const where = {};
+    if (statusParam !== 'ALL') {
+      where.status = statusParam;
+    }
+    if (!isNaN(minScore) && minScore > 0) {
+      where.composite_score = { [Op.gte]: minScore };
+    }
+
+    const reportAttributes = [
+      'id',
+      'tracking_code',
+      'first_name',
+      'last_name',
+      'approximate_age',
+      'gender',
+      'photo_path',
+      'last_known_location',
+      'distinguishing_marks',
+      'clothing_description',
+      'report_type',
+      'source_channel',
+      'status',
+      'createdAt',
+    ];
 
     const candidates = await MatchCandidate.findAll({
-      where: {
-        status: 'PENDING_REVIEW',
-        composite_score: { [require('sequelize').Op.gte]: minScore },
-      },
+      where,
       include: [
         {
           model: Report,
           as: 'sourceReport',
-          attributes: [
-            'id',
-            'first_name',
-            'last_name',
-            'approximate_age',
-            'photo_path',
-            'last_known_location',
-            'report_type',
-          ],
+          attributes: reportAttributes,
         },
         {
           model: Report,
           as: 'targetReport',
-          attributes: [
-            'id',
-            'first_name',
-            'last_name',
-            'approximate_age',
-            'photo_path',
-            'last_known_location',
-            'report_type',
-          ],
+          attributes: reportAttributes,
         },
       ],
       order: [['composite_score', 'DESC']],
@@ -173,10 +182,108 @@ async function getCandidates(req, res) {
     console.error('✖  Get candidates error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error.',
+      message: 'Internal server error while fetching match candidates.',
     });
   }
 }
 
-module.exports = { verifyMatch, getCandidates };
+/**
+ * GET /api/v1/matching/candidates/:id
+ *
+ * Returns a single match candidate by ID with associated reports.
+ */
+async function getCandidateById(req, res) {
+  try {
+    const { id } = req.params;
+
+    const reportAttributes = [
+      'id',
+      'tracking_code',
+      'first_name',
+      'last_name',
+      'approximate_age',
+      'gender',
+      'photo_path',
+      'last_known_location',
+      'distinguishing_marks',
+      'clothing_description',
+      'report_type',
+      'source_channel',
+      'status',
+      'createdAt',
+    ];
+
+    const candidate = await MatchCandidate.findByPk(id, {
+      include: [
+        {
+          model: Report,
+          as: 'sourceReport',
+          attributes: reportAttributes,
+        },
+        {
+          model: Report,
+          as: 'targetReport',
+          attributes: reportAttributes,
+        },
+      ],
+    });
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: `Match candidate not found with ID: ${id}`,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: candidate,
+    });
+  } catch (error) {
+    console.error('✖  Get candidate by ID error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while fetching candidate.',
+    });
+  }
+}
+
+/**
+ * GET /api/v1/matching/stats
+ *
+ * Returns summary statistics for triage decisions.
+ */
+async function getTriageStats(req, res) {
+  try {
+    const [pending, approved, dismissed, total] = await Promise.all([
+      MatchCandidate.count({ where: { status: 'PENDING_REVIEW' } }),
+      MatchCandidate.count({ where: { status: 'APPROVED' } }),
+      MatchCandidate.count({ where: { status: 'DISMISSED' } }),
+      MatchCandidate.count(),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        total,
+        pending,
+        approved,
+        dismissed,
+      },
+    });
+  } catch (error) {
+    console.error('✖  Get triage stats error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while fetching triage stats.',
+    });
+  }
+}
+
+module.exports = {
+  verifyMatch,
+  getCandidates,
+  getCandidateById,
+  getTriageStats,
+};
 

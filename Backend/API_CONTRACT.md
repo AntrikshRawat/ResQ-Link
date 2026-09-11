@@ -371,14 +371,152 @@ The `timeline` array always has 4 milestones. The `reached` flags are set based 
 
 ---
 
+---
+
+### 5. Triage Stats Overview
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/v1/matching/stats` |
+| **Connected Screen** | `/dashboard/triage` |
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "total": 2,
+    "pending": 0,
+    "approved": 1,
+    "dismissed": 1
+  }
+}
+```
+
+---
+
+### 6. Record Registry (Master Persons)
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/v1/persons` (alias: `/api/v1/records`) |
+| **Connected Screen** | `/dashboard/records` |
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `search` | String | No | Case-insensitive filter on first or last name |
+| `status` | String | No | Enum: `SHELTERED`, `HOSPITALIZED`, `REUNITED`, `DECEASED` |
+| `facility` | String | No | Case-insensitive filter on current facility |
+| `limit` | Integer | No | Max records (default: 50) |
+| `offset` | Integer | No | Pagination offset (default: 0) |
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "count": 1,
+  "total": 1,
+  "data": [
+    {
+      "id": "246badfb-638e-436d-b9a4-571746e57769",
+      "canonical_first_name": "Antriksh",
+      "canonical_last_name": null,
+      "confirmed_status": "SHELTERED",
+      "current_facility": "manipal university jaipur",
+      "primary_photo_path": null,
+      "merged_report_ids": ["dd2d055f-...", "7a5bcaeb-..."],
+      "createdAt": "2026-09-11T18:25:40.342Z",
+      "updatedAt": "2026-09-11T18:25:40.342Z"
+    }
+  ]
+}
+```
+
+---
+
+### 7. Single Record Details (with Merged Reports)
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/v1/persons/:id` (alias: `/api/v1/records/:id`) |
+| **Connected Screen** | `/dashboard/records` (View Detail Dialog) |
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "246badfb-638e-436d-b9a4-571746e57769",
+    "canonical_first_name": "Antriksh",
+    "canonical_last_name": null,
+    "confirmed_status": "SHELTERED",
+    "current_facility": "manipal university jaipur",
+    "primary_photo_path": null,
+    "merged_report_ids": ["dd2d055f-...", "7a5bcaeb-..."],
+    "createdAt": "2026-09-11T18:25:40.342Z",
+    "updatedAt": "2026-09-11T18:25:40.342Z",
+    "merged_reports": [
+      {
+        "id": "dd2d055f-...",
+        "tracking_code": "TRK-EV1D",
+        "report_type": "RESCUED",
+        "first_name": "Antriksh",
+        "approximate_age": 22,
+        "gender": "MALE",
+        "last_known_location": "near manipal college",
+        "status": "RESOLVED_LOCATED"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 8. System Metrics Overview
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/v1/metrics` |
+| **Connected Screen** | Home (`/`) Metrics Ticker |
+
+#### Success Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "total_reports": 6,
+    "people_matched": 1,
+    "active_searches": 4,
+    "families_reunited": 0
+  }
+}
+```
+
+---
+
 ## Quick Reference
 
 | # | Method | Endpoint | Screen | Purpose |
 |---|---|---|---|---|
 | 1 | `POST` | `/api/v1/intake/report` | `/report/missing`, `/report/rescued` | Submit a new report |
 | 2 | `GET` | `/api/v1/track/:trackingCode` | `/track/[code]` | Family status lookup |
-| 3 | `GET` | `/api/v1/matching/candidates` | `/dashboard/triage` | Pending match cards |
-| 4 | `POST` | `/api/v1/matching/verify` | `/dashboard/triage` | Approve or dismiss a match |
+| 3 | `GET` | `/api/v1/matching/candidates` | `/dashboard/triage` | Match cards for triage |
+| 4 | `GET` | `/api/v1/matching/stats` | `/dashboard/triage` | Triage counts summary |
+| 5 | `POST` | `/api/v1/matching/verify` | `/dashboard/triage` | Approve or dismiss a match |
+| 6 | `GET` | `/api/v1/persons` | `/dashboard/records` | Master registry records |
+| 7 | `GET` | `/api/v1/persons/:id` | `/dashboard/records` | Person details & merged reports |
+| 8 | `GET` | `/api/v1/metrics` | Home (`/`) | Live counters overview |
 
 ---
 

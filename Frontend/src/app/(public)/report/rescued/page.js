@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import CameraCapture from "@/components/report/CameraCapture";
 import { rescuedPersonSchema } from "@/lib/schemas/report-schema";
 import { createReport } from "@/lib/api";
-import { facilityOptions } from "@/lib/mock-data";
+import { facilityOptions } from "@/lib/constants";
 
 import { LuHeartHandshake, LuCircleCheck, LuLoader, LuCopy, LuCheck } from "react-icons/lu";
 
