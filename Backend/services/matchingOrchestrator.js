@@ -150,4 +150,37 @@ async function findMatchesForReport(reportId) {
   }
 }
 
-module.exports = { findMatchesForReport };
+/**
+ * Directly compares two database reports by ID using the AI matching pipeline.
+ *
+ * @param {string} reportIdA
+ * @param {string} reportIdB
+ * @returns {Promise<object>} Match evaluation result
+ */
+async function evaluateDirectReports(reportIdA, reportIdB) {
+  const [reportA, reportB] = await Promise.all([
+    Report.findByPk(reportIdA),
+    Report.findByPk(reportIdB),
+  ]);
+
+  if (!reportA) {
+    throw new Error(`Report not found with ID: ${reportIdA}`);
+  }
+  if (!reportB) {
+    throw new Error(`Report not found with ID: ${reportIdB}`);
+  }
+
+  const result = await evaluateMatch(reportA, reportB, 0.50);
+  return {
+    reportA,
+    reportB,
+    evaluation: result,
+  };
+}
+
+module.exports = {
+  findMatchesForReport,
+  evaluateDirectReports,
+  COMPOSITE_THRESHOLD,
+};
+
