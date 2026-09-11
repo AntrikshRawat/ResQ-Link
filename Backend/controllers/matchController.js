@@ -280,10 +280,167 @@ async function getTriageStats(req, res) {
   }
 }
 
+/**
+ * DELETE /api/v1/matching/candidates/:id
+ *
+ * Deletes a match candidate from the triage console.
+ */
+async function deleteCandidate(req, res) {
+  try {
+    const { id } = req.params;
+    const candidate = await MatchCandidate.findByPk(id);
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: `Match candidate not found with ID: ${id}`,
+      });
+    }
+
+    await candidate.destroy();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Match candidate deleted successfully.',
+    });
+  } catch (error) {
+    console.error('✖  Delete candidate error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while deleting match candidate.',
+    });
+  }
+}
+
+/**
+ * POST /api/v1/matching/evaluate
+ *
+ * Evaluates profile matching of two persons' data using the AI sidecar service.
+ * Supports:
+ *   Option 1: Passing direct person profiles:
+ *     { personA: { ... }, personB: { ... } } or { reportA: { ... }, reportB: { ... } }
+ *   Option 2: Passing report IDs to evaluate from database:
+ *     { report_id_a: "uuid", report_id_b: "uuid" }
+ */
+async function evaluatePersons(req, res) {
+  try {
+    const { personA, personB, reportA, reportB, report_id_a, report_id_b } = req.body;
+
+    // Mode 1: Evaluation by database Report IDs
+    if (report_id_a && report_id_b) {
+      const { evaluateDirectReports } = require('../services/matchingOrchestrator');
+      const result = await evaluateDirectReports(report_id_a, report_id_b);
+      return res.status(200).json({
+        success: true,
+        message: 'Profile match evaluation completed successfully.',
+        data: result,
+      });
+    }
+
+    // Mode 2: Evaluation by direct person/report payload objects
+    const candidateA = reportA || personA;
+    const candidateB = reportB || personB;
+
+    if (!candidateA || !candidateB) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Missing candidates for evaluation. Provide either (report_id_a, report_id_b) or (personA/reportA, personB/reportB).',
+      });
+    }
+
+    if (!candidateA.firstName && !candidateA.first_name) {
+      return res.status(400).json({
+        success: false,
+        message: 'personA / reportA must include at least firstName.',
+      });
+    }
+    if (!candidateB.firstName && !candidateB.first_name) {
+      return res.status(400).json({
+        success: false,
+        message: 'personB / reportB must include at least firstName.',
+      });
+    }
+
+    const { evaluateMatch } = require('../services/scoringService');
+    const result = await evaluateMatch(candidateA, candidateB, 0.50);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile match evaluation completed successfully.',
+      data: {
+        candidateA,
+        candidateB,
+        evaluation: result,
+      },
+    });
+  } catch (error) {
+    console.error('✖  Profile evaluation error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Internal server error during profile evaluation.',
+    });
+  }
+}
+
+/**
+ * GET /api/v1/matching/ai-health
+ *
+ * Checks connectivity and health of the AI sidecar service.
+ */
+async function getAiHealth(req, res) {
+  try {
+    const { checkAiHealth } = require('../services/scoringService');
+    const health = await checkAiHealth();
+
+    return res.status(200).json({
+      success: true,
+      ai_sidecar: health,
+    });
+  } catch (error) {
+    console.error('✖  AI Health check error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to verify AI health.',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/v1/matching/trigger/:reportId
+ *
+ * Manually triggers the matching orchestrator for a specific report.
+ */
+async function triggerReportMatching(req, res) {
+  try {
+    const { reportId } = req.params;
+    const { findMatchesForReport } = require('../services/matchingOrchestrator');
+    const result = await findMatchesForReport(reportId);
+
+    return res.status(200).json({
+      success: true,
+      message: `Matching executed for report ${reportId}.`,
+      data: result,
+    });
+  } catch (error) {
+    console.error(`✖  Trigger matching error for report ${req.params.reportId}:`, error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Internal server error during matching trigger.',
+    });
+  }
+}
+
 module.exports = {
   verifyMatch,
   getCandidates,
   getCandidateById,
   getTriageStats,
+  deleteCandidate,
+  evaluatePersons,
+  getAiHealth,
+  triggerReportMatching,
 };
+
 

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import MatchCard from "@/components/triage/MatchCard";
-import { getMatchCandidates, getTriageStats, verifyMatch } from "@/lib/api";
+import { getMatchCandidates, getTriageStats, verifyMatch, deleteMatchCandidate } from "@/lib/api";
 import { LuGitCompareArrows, LuLoader, LuTriangleAlert, LuRefreshCw } from "react-icons/lu";
 
 export default function TriagePage() {
@@ -47,13 +47,26 @@ export default function TriagePage() {
     mutationFn: ({ candidateId, decision }) =>
       verifyMatch(candidateId, decision),
     onSuccess: () => {
-      // Refetch candidates and stats so counts and card states update
       queryClient.invalidateQueries({ queryKey: ["candidates"] });
       queryClient.invalidateQueries({ queryKey: ["triage-stats"] });
       queryClient.invalidateQueries({ queryKey: ["metrics"] });
       queryClient.invalidateQueries({ queryKey: ["persons"] });
 
-      // Reset index if we were at the end
+      setCurrentIndex((i) => {
+        const newLength = matches.length - 1;
+        return i >= newLength ? Math.max(newLength - 1, 0) : i;
+      });
+    },
+  });
+
+  // ── Delete candidate mutation ─────────────────────────────────────────
+  const deleteMutation = useMutation({
+    mutationFn: (candidateId) => deleteMatchCandidate(candidateId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["triage-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["metrics"] });
+
       setCurrentIndex((i) => {
         const newLength = matches.length - 1;
         return i >= newLength ? Math.max(newLength - 1, 0) : i;
@@ -62,20 +75,27 @@ export default function TriagePage() {
   });
 
   const handleApprove = useCallback(() => {
-    if (!currentMatch || mutation.isPending) return;
+    if (!currentMatch || mutation.isPending || deleteMutation.isPending) return;
     mutation.mutate({
       candidateId: currentMatch.id,
       decision: "APPROVE",
     });
-  }, [currentMatch, mutation]);
+  }, [currentMatch, mutation, deleteMutation.isPending]);
 
   const handleDismiss = useCallback(() => {
-    if (!currentMatch || mutation.isPending) return;
+    if (!currentMatch || mutation.isPending || deleteMutation.isPending) return;
     mutation.mutate({
       candidateId: currentMatch.id,
       decision: "DISMISS",
     });
-  }, [currentMatch, mutation]);
+  }, [currentMatch, mutation, deleteMutation.isPending]);
+
+  const handleDelete = useCallback(() => {
+    if (!currentMatch || mutation.isPending || deleteMutation.isPending) return;
+    if (window.confirm("Are you sure you want to permanently delete this match candidate?")) {
+      deleteMutation.mutate(currentMatch.id);
+    }
+  }, [currentMatch, mutation.isPending, deleteMutation]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────
   useEffect(() => {
@@ -224,7 +244,8 @@ export default function TriagePage() {
               match={currentMatch}
               onApprove={handleApprove}
               onDismiss={handleDismiss}
-              isLoading={mutation.isPending}
+              onDelete={handleDelete}
+              isLoading={mutation.isPending || deleteMutation.isPending}
             />
 
             {/* Navigation dots */}

@@ -94,23 +94,39 @@ async function findMatchesForReport(reportId) {
       );
 
       // Only persist candidates that meet the composite threshold
-      if (scoringResult.composite_score >= COMPOSITE_THRESHOLD) {
-        const candidate = await MatchCandidate.create({
-          source_report_id: reportId,
-          target_report_id: match.id,
-          composite_score: scoringResult.composite_score,
-          face_similarity_score: scoringResult.face_similarity_score,
-          phonetic_similarity_score: scoringResult.phonetic_similarity_score,
-          discrepancy_summary: scoringResult.discrepancy_summary,
-          status: 'PENDING_REVIEW',
+        // Upsert candidate record to prevent duplicate entries
+        const existing = await MatchCandidate.findOne({
+          where: {
+            source_report_id: reportId,
+            target_report_id: match.id,
+          },
         });
 
-        createdCandidates.push(candidate);
+        if (existing) {
+          await existing.update({
+            composite_score: scoringResult.composite_score,
+            face_similarity_score: scoringResult.face_similarity_score,
+            phonetic_similarity_score: scoringResult.phonetic_similarity_score,
+            discrepancy_summary: scoringResult.discrepancy_summary,
+          });
+          createdCandidates.push(existing);
+        } else {
+          const candidate = await MatchCandidate.create({
+            source_report_id: reportId,
+            target_report_id: match.id,
+            composite_score: scoringResult.composite_score,
+            face_similarity_score: scoringResult.face_similarity_score,
+            phonetic_similarity_score: scoringResult.phonetic_similarity_score,
+            discrepancy_summary: scoringResult.discrepancy_summary,
+            status: 'PENDING_REVIEW',
+          });
+          createdCandidates.push(candidate);
+        }
       }
     }
 
     console.log(
-      `✔  Created ${createdCandidates.length} match candidate(s) for report ${reportId}`
+      `✔  Processed ${createdCandidates.length} qualifying match candidate(s) for report ${reportId}`
     );
 
     return {
@@ -125,4 +141,37 @@ async function findMatchesForReport(reportId) {
   }
 }
 
-module.exports = { findMatchesForReport };
+/**
+ * Directly compares two database reports by ID using the AI matching pipeline.
+ *
+ * @param {string} reportIdA
+ * @param {string} reportIdB
+ * @returns {Promise<object>} Match evaluation result
+ */
+async function evaluateDirectReports(reportIdA, reportIdB) {
+  const [reportA, reportB] = await Promise.all([
+    Report.findByPk(reportIdA),
+    Report.findByPk(reportIdB),
+  ]);
+
+  if (!reportA) {
+    throw new Error(`Report not found with ID: ${reportIdA}`);
+  }
+  if (!reportB) {
+    throw new Error(`Report not found with ID: ${reportIdB}`);
+  }
+
+  const result = await evaluateMatch(reportA, reportB, 0.50);
+  return {
+    reportA,
+    reportB,
+    evaluation: result,
+  };
+}
+
+module.exports = {
+  findMatchesForReport,
+  evaluateDirectReports,
+  COMPOSITE_THRESHOLD,
+};
+

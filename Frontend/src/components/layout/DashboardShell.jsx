@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LuShield, LuGitCompareArrows, LuDatabase, LuChevronLeft, LuChevronRight, LuHouse } from "react-icons/lu";
+import { LuShield, LuGitCompareArrows, LuDatabase, LuChevronLeft, LuChevronRight, LuHouse, LuLogOut } from "react-icons/lu";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 const sidebarLinks = [
   {
@@ -27,6 +28,7 @@ const sidebarLinks = [
 export default function DashboardShell({ children }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -88,13 +90,37 @@ export default function DashboardShell({ children }) {
         <Separator />
 
         {/* Sidebar footer */}
-        <div className="p-2">
+        <div className="p-2 space-y-1">
+          {/* Admin info badge */}
+          {user && (
+            <div
+              className={cn(
+                "flex items-center gap-2 rounded-lg bg-sidebar-accent/50 p-2 text-xs",
+                collapsed ? "justify-center" : "px-3"
+              )}
+            >
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-500/20 text-red-500 font-bold text-[11px]">
+                {user.full_name?.charAt(0) || "A"}
+              </div>
+              {!collapsed && (
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-sidebar-foreground">
+                    {user.full_name}
+                  </div>
+                  <div className="text-[10px] text-red-500 font-mono font-medium uppercase">
+                    Staff Admin
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Link
                   href="/"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                 >
                   <LuHouse className="h-5 w-5 shrink-0" />
                   {!collapsed && <span>Public Site</span>}
@@ -102,6 +128,26 @@ export default function DashboardShell({ children }) {
               </TooltipTrigger>
               {collapsed && (
                 <TooltipContent side="right">Public Site</TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    logout();
+                    window.location.href = "/login?role=admin";
+                  }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <LuLogOut className="h-5 w-5 shrink-0" />
+                  {!collapsed && <span>Sign Out</span>}
+                </button>
+              </TooltipTrigger>
+              {collapsed && (
+                <TooltipContent side="right">Sign Out</TooltipContent>
               )}
             </Tooltip>
           </TooltipProvider>
